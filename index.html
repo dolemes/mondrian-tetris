@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mondrian Tetris</title>
+<style>
+  :root {
+    --bg: #F4F4F0;
+    --paper: #F5F5F0;
+    --ink: #111111;
+    --red: #DE3831;
+    --blue: #21408E;
+    --yellow: #F9D342;
+    --line: 5px;
+    --font: "Futura", "Century Gothic", "Avenir Next", "Jost", "Trebuchet MS", "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--ink); font-family: var(--font); }
+  body { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; -webkit-tap-highlight-color: transparent; }
+  [hidden] { display: none !important; }
+  button, input { font: inherit; color: inherit; }
+
+  /* ---------- Telas de abertura / fim ---------- */
+  .screen { flex: 1; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .composition {
+    width: min(94vw, 720px);
+    display: grid;
+    grid-template-columns: 1.4fr 3fr;
+    grid-template-rows: 1.1fr 2.2fr auto;
+    border: var(--line) solid var(--ink);
+    background: var(--ink);
+    gap: var(--line);
+  }
+  .composition > div { background: var(--paper); padding: 18px 20px; }
+  .c-red   { background: var(--red) !important; grid-row: 1 / 3; }
+  .c-title { grid-column: 2; display: flex; flex-direction: column; justify-content: flex-end; }
+  .c-form  { grid-column: 2; }
+  .c-blue  { background: var(--blue) !important; min-height: 56px; }
+  .c-foot  { background: var(--paper); display: flex; align-items: center; font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; }
+  .c-yellow{ background: var(--yellow) !important; min-height: 56px; }
+  h1 { margin: 0; font-size: clamp(2rem, 7vw, 3.4rem); line-height: .92; letter-spacing: -.03em; text-transform: uppercase; font-weight: 800; }
+  .sub { margin: 10px 0 0; font-size: .85rem; letter-spacing: .12em; text-transform: uppercase; }
+  label { display: block; font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; margin-bottom: 8px; }
+  input[type=text] {
+    width: 100%; padding: 12px 14px; background: #fff; border: 4px solid var(--ink); border-radius: 0;
+    font-size: 1.1rem; outline: none;
+  }
+  input[type=text]:focus { box-shadow: 6px 6px 0 var(--yellow); }
+  .err { color: var(--red); font-size: .8rem; min-height: 1.2em; margin: 6px 0 0; font-weight: 700; }
+  .btn {
+    display: inline-block; margin-top: 10px; padding: 12px 22px; background: var(--ink); color: var(--paper);
+    border: 4px solid var(--ink); border-radius: 0; cursor: pointer; font-weight: 800;
+    letter-spacing: .14em; text-transform: uppercase; font-size: .85rem; transition: background .15s, color .15s, transform .1s;
+  }
+  .btn:hover, .btn:focus-visible { background: var(--red); border-color: var(--ink); outline: none; }
+  .btn.ghost { background: var(--paper); color: var(--ink); }
+  .btn.ghost:hover, .btn.ghost:focus-visible { background: var(--yellow); }
+  .btn:active { transform: translate(2px, 2px); }
+  .end-card .c-title h1 { font-size: clamp(1.6rem, 5vw, 2.6rem); }
+  .end-card p { margin: 6px 0; line-height: 1.45; }
+  .end-score { font-size: 2.2rem; font-weight: 800; letter-spacing: -.02em; }
+
+  /* ---------- Jogo ---------- */
+  #game { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 12px 14px 16px; gap: 12px; }
+  .hud {
+    width: min(100%, 880px); display: grid; grid-template-columns: 1.1fr 2.2fr .8fr 1.4fr;
+    border: 4px solid var(--ink); background: var(--ink); gap: 4px; transition: opacity .8s;
+  }
+  .hud > div { background: var(--paper); padding: 8px 12px; min-width: 0; }
+  .hud small { display: block; font-size: .62rem; letter-spacing: .16em; text-transform: uppercase; opacity: .65; }
+  .hud b { display: block; font-size: 1rem; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hud .goal b { white-space: normal; font-size: .85rem; line-height: 1.2; }
+  .hud .who { background: var(--yellow); }
+  .stage { display: flex; gap: 18px; align-items: flex-start; justify-content: center; width: 100%; }
+  .frame {
+    position: relative; padding: 14px; background: #fff; border: 10px solid var(--ink);
+    box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--ink), 10px 14px 28px rgba(0,0,0,.22);
+    transition: transform .8s ease;
+  }
+  canvas { display: block; }
+  #board { height: min(66vh, 640px); aspect-ratio: 10 / 18; width: auto; background: var(--paper); touch-action: none; }
+
+  .side { display: grid; width: 250px; }
+  .side > * { grid-area: 1 / 1; transition: opacity .8s ease; }
+  .panel { border: 4px solid var(--ink); background: var(--ink); display: flex; flex-direction: column; gap: 4px; }
+  .panel > section { background: var(--paper); padding: 10px 12px; }
+  .panel h3 { margin: 0 0 6px; font-size: .66rem; letter-spacing: .18em; text-transform: uppercase; }
+  #next { display: block; margin: 0 auto; width: 104px; height: 104px; }
+  .keys { margin: 0; padding: 0; list-style: none; font-size: .78rem; line-height: 1.7; }
+  kbd { display: inline-block; min-width: 1.6em; padding: 0 5px; text-align: center; background: #fff; border: 2px solid var(--ink); font: 700 .72rem var(--font); margin-right: 3px; }
+  .ficha { font-size: .78rem; line-height: 1.4; }
+  .ficha em { font-style: normal; font-weight: 800; }
+  .meter { display: none; gap: 5px; flex-direction: column; margin-top: 4px; }
+  .meter.on { display: flex; }
+  .meter div { display: grid; grid-template-columns: 22px 1fr 30px; align-items: center; gap: 6px; font-size: .72rem; font-weight: 800; }
+  .meter .bar { height: 12px; border: 2px solid var(--ink); background: #fff; position: relative; }
+  .meter .bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--c); }
+  .meter .bar::after { content: ""; position: absolute; left: 22%; right: 55%; top: -2px; bottom: -2px; border: 0 solid var(--ink); border-width: 0 2px; opacity: .45; }
+
+  .curator { opacity: 0; pointer-events: none; align-self: start; }
+  .curator .panel > section { padding: 14px; }
+  .curator h2 { margin: 0 0 4px; font-size: 1.15rem; line-height: 1.05; text-transform: uppercase; letter-spacing: -.01em; }
+  .curator .meta { font-size: .68rem; letter-spacing: .12em; text-transform: uppercase; opacity: .7; margin: 0 0 10px; }
+  .curator p { font-size: .82rem; line-height: 1.5; margin: 0 0 8px; }
+  .gallery .play-only { opacity: 0; pointer-events: none; }
+  .gallery .curator { opacity: 1; pointer-events: auto; }
+  .gallery .hud .dim { opacity: 0; }
+  .gallery .touch { opacity: 0; pointer-events: none; }
+
+  .touch { display: none; width: min(100%, 420px); grid-template-columns: repeat(5, 1fr); gap: 6px; transition: opacity .6s; }
+  .touch button {
+    height: 56px; background: var(--paper); border: 4px solid var(--ink); border-radius: 0; font-size: 1.4rem; font-weight: 800;
+    touch-action: none; user-select: none; -webkit-user-select: none; cursor: pointer;
+  }
+  .touch button:active, .touch button.on { background: var(--yellow); }
+  .touch .t-hard { background: var(--red); color: #fff; }
+  .touch .t-rot { background: var(--blue); color: #fff; }
+
+  @media (pointer: coarse), (max-width: 760px) { .touch { display: grid; } }
+  @media (max-width: 760px) {
+    #game { padding: 8px 10px 12px; gap: 8px; }
+    .hud { grid-template-columns: 1fr 1fr; }
+    .hud .phase, .hud .goal { grid-column: 1 / -1; }
+    .stage { flex-direction: column; align-items: center; gap: 10px; }
+    #board { height: min(52vh, 560px); }
+    .frame { padding: 8px; border-width: 8px; }
+    .side { width: min(100%, 420px); }
+    .play-only .hide-sm { display: none; }
+    #next { width: 80px; height: 80px; }
+    .composition { grid-template-columns: 1fr; grid-template-rows: auto; }
+    .c-red { grid-row: auto; min-height: 36px; }
+    .c-title, .c-form { grid-column: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<section id="login" class="screen">
+  <form class="composition" id="loginForm" autocomplete="off" novalidate>
+    <div class="c-red"></div>
+    <div class="c-title">
+      <h1>Mondrian<br>Tetris</h1>
+      <p class="sub">Uma exposição em três composições</p>
+    </div>
+    <div class="c-form">
+      <label for="nameInput">Nome ou apelido do visitante</label>
+      <input id="nameInput" type="text" maxlength="18" placeholder="Seu nome" required>
+      <p class="err" id="nameErr" role="alert"></p>
+      <button class="btn" type="submit">Iniciar Exposição</button>
+    </div>
+    <div class="c-blue"></div>
+    <div class="c-foot">De Stijl · Neoplasticismo · 1921–1943</div>
+    <div class="c-yellow"></div>
+  </form>
+</section>
+
+<!-- JOGO -->
+<main id="game" hidden>
+  <header class="hud">
+    <div class="who"><small>Visitante</small><b id="hudName">—</b></div>
+    <div class="phase dim"><small>Obra</small><b id="hudPhase">—</b></div>
+    <div class="score dim"><small>Pontos</small><b id="hudScore">0</b></div>
+    <div class="goal dim"><small>Meta</small><b id="hudGoal">—</b></div>
+  </header>
+
+  <div class="stage">
+    <div class="frame"><canvas id="board" aria-label="Tabuleiro do jogo"></canvas></div>
+
+    <aside class="side">
+      <div class="panel play-only">
+        <section><h3>Próxima peça</h3><canvas id="next"></canvas></section>
+        <section class="hide-sm">
+          <h3>Controles</h3>
+          <ul class="keys">
+            <li><kbd>←</kbd><kbd>→</kbd> ou <kbd>A</kbd><kbd>D</kbd> mover</li>
+            <li><kbd>↑</kbd> ou <kbd>W</kbd> rotacionar</li>
+            <li><kbd>↓</kbd> ou <kbd>S</kbd> queda suave</li>
+            <li><kbd>Espaço</kbd> queda instantânea</li>
+            <li><kbd>P</kbd> pausa</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Ficha técnica</h3>
+          <div class="ficha" id="ficha"></div>
+          <div class="meter" id="meter">
+            <div style="--c:var(--red)"><span>V</span><span class="bar"><i></i></span><span>0</span></div>
+            <div style="--c:var(--blue)"><span>A</span><span class="bar"><i></i></span><span>0</span></div>
+            <div style="--c:var(--yellow)"><span>Am</span><span class="bar"><i></i></span><span>0</span></div>
+          </div>
+        </section>
+      </div>
+
+      <div class="curator">
+        <div class="panel">
+          <section>
+            <p class="meta" id="curMeta"></p>
+            <h2 id="curTitle"></h2>
+            <p id="curText1"></p>
+            <p id="curText2"></p>
+            <p class="meta" id="curScore"></p>
+            <button class="btn" id="nextBtn" type="button">Próxima Fase</button>
+          </section>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="touch" id="touch" aria-label="Controles de toque">
+    <button type="button" data-act="left" aria-label="Esquerda">◀</button>
+    <button type="button" data-act="rotate" class="t-rot" aria-label="Rotacionar">⟳</button>
+    <button type="button" data-act="right" aria-label="Direita">▶</button>
+    <button type="button" data-act="down" aria-label="Queda suave">▼</button>
+    <button type="button" data-act="hard" class="t-hard" aria-label="Queda instantânea">⤓</button>
+  </div>
+</main>
+
+<!-- FIM -->
+<section id="end" class="screen" hidden>
+  <div class="composition end-card">
+    <div class="c-red" id="endColor"></div>
+    <div class="c-title"><h1 id="endTitle">Fim</h1></div>
+    <div class="c-form">
+      <p id="endMsg"></p>
+      <div class="end-score" id="endScore">0</div>
+      <button class="btn" id="endPrimary" type="button">Tentar novamente</button>
+      <button class="btn ghost" id="endSecondary" type="button">Trocar visitante</button>
+    </div>
+    <div class="c-blue"></div>
+    <div class="c-foot" id="endFoot"></div>
+    <div class="c-yellow"></div>
+  </div>
+</section>
+
+<script>
+'use strict';
+
+/* =====================================================================
+   CONFIGURAÇÃO
+   ===================================================================== */
+const COLS = 10, ROWS = 18, CELL = 36;
+const W = COLS * CELL, H = ROWS * CELL;
+const COLORS = { R: '#DE3831', B: '#21408E', Y: '#F9D342', W: '#F5F5F0' };
+const INK = '#111111', PAPER = '#F5F5F0';
+const STORAGE_KEY = 'mondrian-tetris:name';
+const TARGET = { r0: ROWS - 3, c0: 3, size: 3 };       // área-alvo 3x3 da fase 1
+const SOFT_INTERVAL = 50, DAS_DELAY = 170, DAS_RATE = 55;
+
+const SHAPES = [
+  [[0,0],[0,1],[0,2],[0,3]],                    // I (1x4)
+  [[0,0],[0,1],[0,2]],                          // 1x3
+  [[0,0],[0,1]],                                // dominó
+  [[0,0],[0,1],[1,0],[1,1]],                    // quadrado 2x2
+  [[0,0],[0,1],[0,2],[1,0],[1,1],[1,2]],        // retângulo 2x3
+  [[0,0],[1,0],[2,0],[2,1]],                    // L
+  [[0,1],[1,1],[2,1],[2,0]],                    // J
+  [[0,0],[1,0],[1,1]],                          // L pequeno
+];
+
+/* Fases: cada uma define pesos de cor, velocidade, meta e texto curatorial. */
+const LEVELS = [
+  {
+    title: 'Grande Plano Vermelho', year: 1921,
+    gravity: 850, mono: 0.7, weights: { R: .45, B: .2, Y: .2, W: .15 },
+    ficha: '<em>Composição com Grande Plano Vermelho, Amarelo, Preto, Cinza e Azul</em><br>Piet Mondrian, 1921<br>Óleo sobre tela',
+    goalLabel: 'Preencha a área tracejada 3×3 com vermelho',
+    progress(g) {
+      let n = 0;
+      for (let r = TARGET.r0; r < TARGET.r0 + TARGET.size; r++)
+        for (let c = TARGET.c0; c < TARGET.c0 + TARGET.size; c++) if (g.board[r][c] === 'R') n++;
+      return { done: n === TARGET.size ** 2, text: `Vermelho na área-alvo: ${n}/9` };
+    },
+    cur: ['Um grande plano de vermelho domina a tela e é contido por linhas negras e planos menores de cor. Em 1921, Mondrian já havia reduzido sua linguagem às cores primárias, ao branco e ao preto, buscando uma harmonia feita de equilíbrio assimétrico.',
+          'Você ergueu o seu próprio plano vermelho: o peso da cor só se sustenta quando as linhas e os vazios ao redor o equilibram. A obra original pertence ao acervo do Kunstmuseum Den Haag (Países Baixos).'],
+  },
+  {
+    title: 'Vermelho, Azul e Amarelo', year: 1930,
+    gravity: 700, mono: 0.55, weights: { R: .28, B: .28, Y: .28, W: .16 },
+    ficha: '<em>Composição II em Vermelho, Azul e Amarelo</em><br>Piet Mondrian, 1930<br>Óleo sobre tela',
+    goalLabel: 'Equilibre as três primárias (mín. 8 de cada, nenhuma acima de 45%)',
+    min: 8, lo: 0.22, hi: 0.45,
+    progress(g) {
+      const n = g.counts(), tot = n.R + n.B + n.Y;
+      const ok = n.R >= this.min && n.B >= this.min && n.Y >= this.min &&
+        ['R', 'B', 'Y'].every(k => n[k] / tot >= this.lo && n[k] / tot <= this.hi);
+      return { done: ok, text: `Vermelho ${n.R} · Azul ${n.B} · Amarelo ${n.Y} (mín. ${this.min})` };
+    },
+    cur: ['Nos anos 1930 as composições de Mondrian ficam mais rarefeitas: poucas linhas negras, grandes planos brancos e um pequeno número de áreas coloridas, cuidadosamente pesadas umas contra as outras. Nada é simétrico, e tudo está em equilíbrio.',
+          'A sua tela chegou a esse acordo entre vermelho, azul e amarelo. A obra original, de 1930, integra o acervo do Kunsthaus Zürich (Suíça).'],
+  },
+  {
+    title: 'Broadway Boogie Woogie', year: 1943,
+    gravity: 520, mono: 0.35, weights: { R: .25, B: .25, Y: .25, W: .25 },
+    ficha: '<em>Broadway Boogie Woogie</em><br>Piet Mondrian, 1942–43<br>Óleo sobre tela, 127 × 127 cm',
+    goalLabel: 'Complete 3 linhas',
+    progress(g) { return { done: g.lines >= 3, text: `Linhas completas: ${Math.min(g.lines, 3)}/3` }; },
+    cur: ['Pintada em Nova York, a obra troca as linhas negras por trilhos de pequenos quadrados de cor que pulsam como o ritmo do boogie-woogie e como a malha de ruas de Manhattan. É a síntese final da dança entre ordem e movimento.',
+          'Linha após linha, você completou o seu próprio ritmo. A obra original pertence ao acervo do Museu de Arte Moderna de Nova York (MoMA).'],
+  },
+];
+
+/* =====================================================================
+   UTILIDADES
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+const key = (r, c) => r * 100 + c;
+
+function setupCanvas(canvas, w, h) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return ctx;
+}
+
+function pickWeighted(weights) {
+  let x = Math.random(), last = 'R';
+  for (const k in weights) { last = k; if ((x -= weights[k]) <= 0) return k; }
+  return last;
+}
+
+/* =====================================================================
+   PEÇAS
+   ===================================================================== */
+class Piece {
+  constructor(cells, r = 0, c = 0) { this.cells = cells; this.r = r; this.c = c; }
+
+  static random(level) {
+    const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+    const mono = Math.random() < level.mono;
+    const base = pickWeighted(level.weights);
+    const cells = shape.map(([r, c]) => [r, c, mono ? base : pickWeighted(level.weights)]);
+    const p = new Piece(cells);
+    p.c = Math.floor((COLS - p.width) / 2);
+    return p;
+  }
+  get width()  { return Math.max(...this.cells.map(x => x[1])) + 1; }
+  get height() { return Math.max(...this.cells.map(x => x[0])) + 1; }
+
+  rotated() {
+    const rot = this.cells.map(([r, c, k]) => [c, -r, k]);
+    const minR = Math.min(...rot.map(x => x[0])), minC = Math.min(...rot.map(x => x[1]));
+    const cells = rot.map(([r, c, k]) => [r - minR, c - minC, k]);
+    const p = new Piece(cells);
+    p.r = this.r + Math.floor((this.height - p.height) / 2);
+    p.c = this.c + Math.floor((this.width - p.width) / 2);
+    return p;
+  }
+  clone() { return new Piece(this.cells, this.r, this.c); }
+  map(dr = 0, dc = 0) {
+    const m = new Map();
+    for (const [r, c, k] of this.cells) m.set(key(r + this.r + dr, c + this.c + dc), k);
+    return m;
+  }
+}
+
+/* =====================================================================
+   RENDER
+   ===================================================================== */
+const Renderer = {
+  /* Desenha células com planos fundidos: a borda entre vizinhos de mesma cor some. */
+  cells(ctx, map, size, ox, oy, alpha = 1) {
+    const lw = Math.max(3, Math.round(size * 0.11));
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    for (const [k, color] of map) {
+      const r = Math.floor((k + 50) / 100), c = k - r * 100;
+      ctx.fillStyle = COLORS[color];
+      ctx.fillRect(ox + c * size, oy + r * size, size, size);
+    }
+    ctx.fillStyle = INK;
+    for (const [k, color] of map) {
+      const r = Math.floor((k + 50) / 100), c = k - r * 100;
+      const x = ox + c * size, y = oy + r * size, h = lw / 2;
+      if (map.get(key(r - 1, c)) !== color) ctx.fillRect(x - h, y - h, size + lw, lw);
+      if (map.get(key(r + 1, c)) !== color) ctx.fillRect(x - h, y + size - h, size + lw, lw);
+      if (map.get(key(r, c - 1)) !== color) ctx.fillRect(x - h, y - h, lw, size + lw);
+      if (map.get(key(r, c + 1)) !== color) ctx.fillRect(x + size - h, y - h, lw, size + lw);
+    }
+    ctx.restore();
+  },
+
+  grid(ctx) {
+    ctx.strokeStyle = 'rgba(17,17,17,.13)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let c = 1; c < COLS; c++) { ctx.moveTo(c * CELL + .5, 0); ctx.lineTo(c * CELL + .5, H); }
+    for (let r = 1; r < ROWS; r++) { ctx.moveTo(0, r * CELL + .5); ctx.lineTo(W, r * CELL + .5); }
+    ctx.stroke();
+  },
+
+  target(ctx) {
+    const x = TARGET.c0 * CELL, y = TARGET.r0 * CELL, s = TARGET.size * CELL;
+    ctx.fillStyle = 'rgba(222,56,49,.14)';
+    ctx.fillRect(x, y, s, s);
+    ctx.strokeStyle = COLORS.R; ctx.lineWidth = 3; ctx.setLineDash([9, 6]);
+    ctx.strokeRect(x + 1.5, y + 1.5, s - 3, s - 3);
+    ctx.setLineDash([]);
+  },
+
+  board(ctx, game) {
+    const composition = game.state === 'LEVEL_CLEAR';
+    ctx.fillStyle = PAPER; ctx.fillRect(0, 0, W, H);
+    if (!composition) {
+      this.grid(ctx);
+      if (game.levelIdx === 0) this.target(ctx);
+    }
+    const bmap = new Map();
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (game.board[r][c]) bmap.set(key(r, c), game.board[r][c]);
+    this.cells(ctx, bmap, CELL, 0, 0);
+
+    if (game.cur && !composition) {
+      const gr = game.ghostRow();
+      const ghost = game.cur.map(gr - game.cur.r, 0);
+      this.cells(ctx, ghost, CELL, 0, 0, 0.22);
+      this.cells(ctx, game.cur.map(), CELL, 0, 0);
+    }
+    if (game.state === 'PAUSED') {
+      ctx.fillStyle = 'rgba(244,244,240,.9)'; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = INK; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = '800 38px Futura, "Century Gothic", sans-serif';
+      ctx.fillText('PAUSA', W / 2, H / 2 - 10);
+      ctx.font = '600 14px Futura, "Century Gothic", sans-serif';
+      ctx.fillText('toque ou pressione P para continuar', W / 2, H / 2 + 24);
+    }
+  },
+
+  next(ctx, piece) {
+    const S = 104, size = 24;
+    ctx.clearRect(0, 0, S, S);
+    if (!piece) return;
+    const ox = Math.round((S - piece.width * size) / 2), oy = Math.round((S - piece.height * size) / 2);
+    this.cells(ctx, piece.map(-piece.r, -piece.c), size, ox, oy);
+  },
+};
+
+/* =====================================================================
+   JOGO (lógica + máquina de estados)
+   estados: LOGIN, PLAYING, PAUSED, LEVEL_CLEAR, GAME_OVER, FINISHED
+   ===================================================================== */
+class Game {
+  constructor() {
+    this.state = 'LOGIN';
+    this.name = '';
+    this.score = 0;
+    this.levelIdx = 0;
+    this.levelStartScore = 0;
+    this.board = [];
+    this.cur = null; this.next = null;
+    this.lines = 0;
+    this.acc = 0;
+    this.input = { left: false, right: false, down: false };
+    this.horiz = []; this.dasT = 0; this.dasStarted = false;
+  }
+  get level() { return LEVELS[this.levelIdx]; }
+
+  startLevel(idx, keepScore = true) {
+    this.levelIdx = idx;
+    if (!keepScore) this.score = this.levelStartScore; else this.levelStartScore = this.score;
+    this.board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+    this.lines = 0; this.acc = 0;
+    this.horiz = []; this.input.down = false;
+    this.state = 'PLAYING';
+    this.next = Piece.random(this.level);
+    this.spawn();
+  }
+
+  spawn() {
+    this.cur = this.next;
+    this.next = Piece.random(this.level);
+    this.cur.r = 1 - this.cur.height;               // só a linha de baixo entra no quadro; game over = pilha toca o topo
+    this.cur.c = Math.floor((COLS - this.cur.width) / 2);
+    if (this.collides(this.cur)) { this.cur = null; this.state = 'GAME_OVER'; ui.onGameOver(); }
+  }
+
+  collides(p, dr = 0, dc = 0) {
+    for (const [r, c] of p.cells) {
+      const rr = r + p.r + dr, cc = c + p.c + dc;
+      if (cc < 0 || cc >= COLS || rr >= ROWS) return true;
+      if (rr >= 0 && this.board[rr][cc]) return true;
+    }
+    return false;
+  }
+
+  ghostRow() { let d = 0; while (!this.collides(this.cur, d + 1, 0)) d++; return this.cur.r + d; }
+
+  move(dc) { if (this.cur && !this.collides(this.cur, 0, dc)) { this.cur.c += dc; return true; } return false; }
+
+  rotate() {
+    if (!this.cur) return;
+    const rp = this.cur.rotated();
+    for (const [dr, dc] of [[0,0],[0,-1],[0,1],[0,-2],[0,2],[-1,0],[-1,-1],[-1,1]]) {
+      rp.r += dr - (rp._dr || 0); rp.c += dc - (rp._dc || 0); rp._dr = dr; rp._dc = dc;
+      if (!this.collides(rp)) { this.cur = rp; return; }
+    }
+  }
+
+  stepDown(soft) {
+    if (!this.cur) return;
+    if (!this.collides(this.cur, 1, 0)) { this.cur.r++; if (soft) this.score++; }
+    else this.lock();
+  }
+
+  hardDrop() {
+    if (!this.cur) return;
+    const gr = this.ghostRow();
+    this.score += (gr - this.cur.r) * 2;
+    this.cur.r = gr;
+    this.lock();
+  }
+
+  lock() {
+    if (this.cur.cells.some(([r]) => r + this.cur.r < 0)) {      // travou acima do quadro
+      this.cur = null; this.state = 'GAME_OVER'; ui.onGameOver(); return;
+    }
+    for (const [r, c, k] of this.cur.cells) this.board[r + this.cur.r][c + this.cur.c] = k;
+    this.score += this.cur.cells.length * 5;
+    this.cur = null;
+    this.clearLines();
+    const prog = this.level.progress(this);
+    ui.updateHud();
+    if (prog.done) return this.win();
+    this.spawn();
+    ui.updateHud();
+  }
+
+  clearLines() {
+    let n = 0;
+    for (let r = ROWS - 1; r >= 0; r--) {
+      if (this.board[r].every(Boolean)) {
+        this.board.splice(r, 1);
+        this.board.unshift(Array(COLS).fill(null));
+        n++; r++;
+      }
+    }
+    if (n) { this.lines += n; this.score += [0, 100, 300, 500, 800][Math.min(n, 4)]; }
+  }
+
+  counts() {
+    const n = { R: 0, B: 0, Y: 0, W: 0 };
+    for (const row of this.board) for (const k of row) if (k) n[k]++;
+    return n;
+  }
+
+  win() {
+    this.score += 500;
+    this.state = 'LEVEL_CLEAR';
+    ui.onLevelClear();
+  }
+
+  /* ----- entrada ----- */
+  press(act) {
+    if (act === 'pause') return this.togglePause();
+    if (this.state !== 'PLAYING') return;
+    if (act === 'rotate') this.rotate();
+    else if (act === 'hard') this.hardDrop();
+    else if (act === 'down') this.input.down = true;
+    else if (act === 'left' || act === 'right') {
+      this.horiz = this.horiz.filter(a => a !== act); this.horiz.push(act);
+      this.dasT = 0; this.dasStarted = false;
+      this.move(act === 'left' ? -1 : 1);
+    }
+  }
+  release(act) {
+    if (act === 'down') this.input.down = false;
+    else if (act === 'left' || act === 'right') { this.horiz = this.horiz.filter(a => a !== act); this.dasT = 0; this.dasStarted = false; }
+  }
+  togglePause() {
+    if (this.state === 'PLAYING') { this.state = 'PAUSED'; this.input.down = false; this.horiz = []; }
+    else if (this.state === 'PAUSED') this.state = 'PLAYING';
+  }
+
+  update(dt) {
+    if (this.state !== 'PLAYING') return;
+    // repetição horizontal (DAS)
+    const dir = this.horiz[this.horiz.length - 1];
+    if (dir) {
+      this.dasT += dt;
+      const thr = this.dasStarted ? DAS_RATE : DAS_DELAY;
+      while (this.dasT >= thr) { this.dasT -= thr; this.dasStarted = true; this.move(dir === 'left' ? -1 : 1); }
+    }
+    // gravidade
+    const soft = this.input.down;
+    const interval = soft ? Math.min(SOFT_INTERVAL, this.level.gravity) : this.level.gravity;
+    this.acc += dt;
+    while (this.acc >= interval && this.state === 'PLAYING') { this.acc -= interval; this.stepDown(soft); }
+  }
+}
+
+/* =====================================================================
+   UI
+   ===================================================================== */
+const game = new Game();
+const boardCtx = setupCanvas($('board'), W, H);
+const nextCtx = setupCanvas($('next'), 104, 104);
+
+const ui = {
+  show(id) {
+    for (const s of ['login', 'game', 'end']) $(s).hidden = s !== id;
+  },
+  loadName() {
+    try { return localStorage.getItem(STORAGE_KEY) || ''; } catch (e) { return ''; }
+  },
+  saveName(n) { try { localStorage.setItem(STORAGE_KEY, n); } catch (e) { /* sem persistência */ } },
+
+  updateHud() {
+    const lv = game.level;
+    $('hudName').textContent = game.name;
+    $('hudPhase').textContent = `Fase ${game.levelIdx + 1}: ${lv.title} (${lv.year})`;
+    $('hudScore').textContent = game.score;
+    $('hudGoal').textContent = game.state === 'LEVEL_CLEAR' ? lv.goalLabel : `${lv.goalLabel} — ${lv.progress(game).text}`;
+    this.updateMeter();
+  },
+  updateMeter() {
+    const meter = $('meter');
+    const on = game.levelIdx === 1;
+    meter.classList.toggle('on', on);
+    if (!on) return;
+    const n = game.counts(), tot = (n.R + n.B + n.Y) || 1;
+    [...meter.children].forEach((row, i) => {
+      const v = [n.R, n.B, n.Y][i];
+      row.querySelector('i').style.width = Math.round(v / tot * 100) + '%';
+      row.lastElementChild.textContent = v;
+    });
+  },
+
+  beginLevel(idx, keepScore = true) {
+    $('game').classList.remove('gallery');
+    $('ficha').innerHTML = LEVELS[idx].ficha;
+    game.startLevel(idx, keepScore);
+    this.show('game');
+    this.updateHud();
+  },
+
+  onLevelClear() {
+    const lv = game.level, last = game.levelIdx === LEVELS.length - 1;
+    $('curMeta').textContent = `Obra de referência · ${lv.year}`;
+    $('curTitle').textContent = lv.title;
+    $('curText1').textContent = lv.cur[0];
+    $('curText2').textContent = lv.cur[1];
+    $('curScore').textContent = `${game.name} · ${game.score} pontos`;
+    $('nextBtn').textContent = last ? 'Concluir Exposição' : 'Próxima Fase';
+    this.updateHud();
+    $('game').classList.add('gallery');
+    $('nextBtn').focus({ preventScroll: true });
+  },
+
+  onGameOver() {
+    this.endScreen({
+      title: 'Composição<br>interrompida', color: 'R',
+      msg: `${game.name}, as peças alcançaram o topo da tela de pintura.`,
+      primary: 'Tentar novamente', onPrimary: () => this.beginLevel(game.levelIdx, false),
+      foot: `Fase ${game.levelIdx + 1} · ${game.level.title}`,
+    });
+  },
+  onFinished() {
+    game.state = 'FINISHED';
+    this.endScreen({
+      title: 'Exposição<br>concluída', color: 'Y',
+      msg: `Obrigado pela visita, ${game.name}. Sua pontuação final:`,
+      primary: 'Jogar de novo', onPrimary: () => { game.score = 0; this.beginLevel(0, true); },
+      foot: 'Mondrian · 1921 – 1943',
+    });
+  },
+  endScreen({ title, color, msg, primary, onPrimary, foot }) {
+    $('endTitle').innerHTML = title;
+    $('endMsg').textContent = msg;
+    $('endScore').textContent = game.score;
+    $('endFoot').textContent = foot;
+    $('endColor').style.background = `var(--${{ R: 'red', B: 'blue', Y: 'yellow' }[color]})`;
+    $('endPrimary').textContent = primary;
+    $('endPrimary').onclick = onPrimary;
+    this.show('end');
+    $('endPrimary').focus({ preventScroll: true });
+  },
+};
+
+/* ----- eventos ----- */
+const nameInput = $('nameInput');
+nameInput.value = ui.loadName();
+
+$('loginForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const name = nameInput.value.trim().replace(/\s+/g, ' ');
+  if (!name) { $('nameErr').textContent = 'Informe um nome para entrar na exposição.'; nameInput.focus(); return; }
+  $('nameErr').textContent = '';
+  game.name = name; game.score = 0;
+  ui.saveName(name);
+  ui.beginLevel(0, true);
+});
+nameInput.addEventListener('input', () => { $('nameErr').textContent = ''; });
+
+$('nextBtn').addEventListener('click', () => {
+  if (game.levelIdx < LEVELS.length - 1) ui.beginLevel(game.levelIdx + 1, true);
+  else ui.onFinished();
+});
+$('endSecondary').addEventListener('click', () => {
+  game.state = 'LOGIN'; game.score = 0;
+  ui.show('login'); nameInput.value = ui.loadName(); nameInput.focus();
+});
+
+const KEYMAP = {
+  ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
+  ArrowUp: 'rotate', KeyW: 'rotate', ArrowDown: 'down', KeyS: 'down',
+  Space: 'hard', KeyP: 'pause',
+};
+addEventListener('keydown', e => {
+  const act = KEYMAP[e.code];
+  if (!act || !['PLAYING', 'PAUSED'].includes(game.state)) return;
+  e.preventDefault();
+  if (e.repeat && act !== 'down') return;      // movimento contínuo é tratado pelo DAS
+  game.press(act);
+});
+addEventListener('keyup', e => { const act = KEYMAP[e.code]; if (act) game.release(act); });
+addEventListener('blur', () => { if (game.state === 'PLAYING') game.togglePause(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && game.state === 'PLAYING') game.togglePause(); });
+$('board').addEventListener('pointerdown', () => { if (game.state === 'PAUSED') game.togglePause(); });
+
+/* botões virtuais */
+document.querySelectorAll('#touch button').forEach(btn => {
+  const act = btn.dataset.act;
+  const down = e => { e.preventDefault(); btn.setPointerCapture?.(e.pointerId); btn.classList.add('on'); if (game.state === 'PAUSED') return game.togglePause(); game.press(act); };
+  const up = e => { e.preventDefault(); btn.classList.remove('on'); game.release(act); };
+  btn.addEventListener('pointerdown', down);
+  btn.addEventListener('pointerup', up);
+  btn.addEventListener('pointercancel', up);
+  btn.addEventListener('contextmenu', e => e.preventDefault());
+});
+
+/* ----- loop principal ----- */
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(now - last, 100);   // evita saltos ao voltar de outra aba
+  last = now;
+  if (['PLAYING', 'PAUSED', 'LEVEL_CLEAR'].includes(game.state)) {
+    game.update(dt);
+    Renderer.board(boardCtx, game);
+    Renderer.next(nextCtx, game.state === 'LEVEL_CLEAR' ? null : game.next);
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+ui.show('login');
+nameInput.focus();
+</script>
+</body>
+</html>
